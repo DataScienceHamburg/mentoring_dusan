@@ -114,29 +114,3 @@ for epoch in range(n_epochs):
 
 #%% predict on test set
 
-#%% predict on test set
-correct_predictions = 0
-total_samples = 0
-
-with torch.no_grad():
-    for i, (imgs, _) in enumerate(test_loader):
-        real_imgs = imgs
-        batch_size = imgs.size(0)
-
-        # Predict on real images
-        real_predictions = discriminator(real_imgs)
-        correct_predictions += (real_predictions >= 0.5).sum().item()
-
-        # Generate fake images
-        z = torch.randn(batch_size, latent_dim)
-        gen_imgs = generator(z)
-
-        # Predict on fake images
-        fake_predictions = discriminator(gen_imgs)
-        correct_predictions += (fake_predictions < 0.5).sum().item()
-
-        total_samples += batch_size * 2  # Both real and fake images
-
-    accuracy = correct_predictions / total_samples
-    print(f"Test Set Accuracy: {accuracy:.4f}")
-
