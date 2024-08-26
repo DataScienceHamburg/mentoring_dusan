@@ -55,7 +55,7 @@ model = ImageClassificationNet()
 loss_fn = nn.BCELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.8)
 # %% training
-NUM_EPOCHS = 100
+NUM_EPOCHS = 10
 losses = []
 for epoch in range(NUM_EPOCHS):
     epoch_loss = 0
