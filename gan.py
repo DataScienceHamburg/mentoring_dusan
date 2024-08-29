@@ -30,15 +30,14 @@ class Generator(nn.Module):
         return img
 
 class Discriminator(nn.Module):
-    def __init__(self, img_shape=(1, 28, 28)):
+    def __init__(self, img_shape=(1, 28, 28), num_classes=3):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(int(np.prod(img_shape)), 512),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(512, 256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
+            nn.Linear(256, num_classes)
         )
 
     def forward(self, img):
@@ -54,7 +53,7 @@ generator = Generator(latent_dim=latent_dim, img_shape=img_shape)
 discriminator = Discriminator(img_shape=img_shape)
 
 #%%
-adversarial_loss = torch.nn.BCELoss()
+adversarial_loss = nn.CrossEntropyLoss()
 
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
@@ -70,16 +69,21 @@ transform = transforms.Compose([
 trainset = torchvision.datasets.ImageFolder(root='data/train', transform=transform)
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
 testset = torchvision.datasets.ImageFolder(root='data/test', transform=transform)
-test_loader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False)
 
 
 
 #%%
-n_epochs = 50
+n_epochs = 10
 for epoch in range(n_epochs):
-    for i, (imgs, _) in enumerate(train_loader):
-        valid = torch.ones(imgs.size(0), 1, requires_grad=False)
-        fake = torch.zeros(imgs.size(0), 1, requires_grad=False)
+    d_loss_total = 0
+    g_loss_total = 0
+    for i, (imgs, labels) in enumerate(train_loader):
+        batch_size = imgs.size(0)
+        
+        # Create labels
+        real_labels = labels  # 0 or 1 for real diseases
+        fake_labels = torch.full((batch_size,), 2, dtype=torch.long)  # 2 for fake images
 
         real_imgs = imgs
 
@@ -89,10 +93,11 @@ for epoch in range(n_epochs):
 
         optimizer_G.zero_grad()
 
-        z = torch.randn(imgs.shape[0], latent_dim)
+        z = torch.randn(batch_size, latent_dim)
         gen_imgs = generator(z)
 
-        g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+        fake_output = discriminator(gen_imgs)
+        g_loss = adversarial_loss(fake_output, real_labels)  # Try to fool discriminator
 
         g_loss.backward()
         optimizer_G.step()
@@ -103,14 +108,37 @@ for epoch in range(n_epochs):
 
         optimizer_D.zero_grad()
 
-        real_loss = adversarial_loss(discriminator(real_imgs), valid)
-        fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
+        real_output = discriminator(real_imgs)
+        fake_output = discriminator(gen_imgs.detach())
+
+        real_loss = adversarial_loss(real_output, real_labels)
+        fake_loss = adversarial_loss(fake_output, fake_labels)
         d_loss = (real_loss + fake_loss) / 2
 
         d_loss.backward()
         optimizer_D.step()
 
-        print(f"[Epoch {epoch}/{n_epochs}] [Batch {i}/{len(train_loader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}]")
+        d_loss_total += d_loss.item()
+        g_loss_total += g_loss.item()
+    print(f"Epoch {epoch+1}/{n_epochs} - D Loss: {d_loss_total/len(train_loader)} - G Loss: {g_loss_total/len(train_loader)}")
+        
 
 #%% predict on test set
 
+#%% predict on test set
+correct_predictions = 0
+total_samples = 0
+
+with torch.no_grad():
+    for i, (imgs, labels) in enumerate(test_loader):
+        outputs = discriminator(imgs)
+        _, predicted = torch.max(outputs, 1)
+        total_samples += labels.size(0)
+        correct_predictions += (predicted == labels).sum().item()
+
+        print(f"True label: {labels.item()}, Predicted: {predicted.item()}")
+
+accuracy = 100 * correct_predictions / total_samples
+print(f"Test Accuracy: {accuracy:.2f}%")
+
+# %%

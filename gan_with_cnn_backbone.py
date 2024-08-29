@@ -15,28 +15,28 @@ class Generator(nn.Module):
         self.img_shape = img_shape
         
         self.init_size = img_shape[1] // 4  # Initial size before upsampling
-        self.l1 = nn.Sequential(nn.Linear(latent_dim, 256 * self.init_size ** 2))
+        self.l1 = nn.Sequential(nn.Linear(latent_dim, 128 * self.init_size ** 2))
 
         self.conv_blocks = nn.Sequential(
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(128),
             nn.Upsample(scale_factor=2),
-            nn.Conv2d(256, 256, 3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(256, 128, 3, stride=1, padding=1),
+            nn.Conv2d(128, 128, 3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Upsample(scale_factor=2),
             nn.Conv2d(128, 64, 3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, img_shape[0], 3, stride=1, padding=1),
+            nn.Conv2d(64, 32, 3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(32, img_shape[0], 3, stride=1, padding=1),
             nn.Tanh()
         )
 
     def forward(self, z):
         out = self.l1(z)
-        out = out.view(out.shape[0], 256, self.init_size, self.init_size)
+        out = out.view(out.shape[0], 128, self.init_size, self.init_size)
         img = self.conv_blocks(out)
         return img
 
@@ -59,7 +59,7 @@ class Discriminator(nn.Module):
         )
         
         # The height and width of downsampled image
-        ds_size = img_shape[1] // 2**4
+        ds_size = img_shape[1] // 2**3
         self.adv_layer = nn.Sequential(
             nn.Linear(128 * ds_size ** 2, 1),
             nn.Sigmoid()
